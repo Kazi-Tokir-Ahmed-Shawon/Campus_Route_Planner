@@ -145,7 +145,7 @@ The frontend will be running on `http://localhost:3000`
 ### Backend (.env)
 
 ```env
-PORT=5000
+PORT=5001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
 ```
