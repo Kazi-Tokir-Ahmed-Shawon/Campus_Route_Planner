@@ -41,16 +41,25 @@ const endIcon = new Icon({
 
 interface MapComponentProps {
   geoJsonData: FeatureCollection | null;
-  routeGeoJson: FeatureCollection | null;
+  allRoutes?: FeatureCollection[];
   startPoint: [number, number] | null;
   endPoint: [number, number] | null;
+  obstacles?: { id: string; name: string; lat: number; lng: number }[];
 }
+
+const stairsIcon = new Icon({
+  iconUrl: "/stairs-14-svgrepo-com.svg",
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
 
 const MapComponent = ({
   geoJsonData,
-  routeGeoJson,
+  allRoutes = [],
   startPoint,
   endPoint,
+  obstacles = [],
 }: MapComponentProps) => {
   const position: LatLngExpression = [51.589, -3.327]; // Centered on Trefforest campus
 
@@ -84,12 +93,18 @@ const MapComponent = ({
           }
         }}
       />
-      {routeGeoJson && (
+      {/* Render all routes: first (shortest) in blue, others in gray */}
+      {allRoutes.map((route, idx) => (
         <GeoJSON
-          data={routeGeoJson}
-          style={() => ({ color: "blue", weight: 5, opacity: 0.7 })}
+          key={idx}
+          data={route}
+          style={() =>
+            idx === 0
+              ? { color: "blue", weight: 5, opacity: 0.7 }
+              : { color: "gray", weight: 5, opacity: 0.3 }
+          }
         />
-      )}
+      ))}
       {/* Start and End Markers */}
       {startPoint && (
         <Marker position={startPoint} icon={startIcon}>
@@ -101,6 +116,12 @@ const MapComponent = ({
           <Popup>Destination</Popup>
         </Marker>
       )}
+      {/* Obstacles Markers */}
+      {obstacles.map((obs) => (
+        <Marker key={obs.id} position={[obs.lat, obs.lng]} icon={stairsIcon}>
+          <Popup>{obs.name}</Popup>
+        </Marker>
+      ))}
       <Marker position={position} icon={defaultIcon}>
         <Popup>University of South Wales, Trefforest Campus</Popup>
       </Marker>

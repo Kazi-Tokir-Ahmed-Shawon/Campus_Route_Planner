@@ -93,3 +93,99 @@ export const findPath = (
   // No path found
   return null;
 };
+
+// Find up to k alternative shortest paths using a simple Yen's algorithm approach
+export const findKShortestPaths = (
+  graph: { [key: string]: { [key: string]: number } },
+  locations: { [key: string]: { lat: number; lng: number } },
+  startId: string,
+  endId: string,
+  k: number
+): PathResult[] => {
+  const paths: PathResult[] = [];
+  const removedEdges: Array<[string, string, number]> = [];
+
+  // Helper to remove an edge
+  const removeEdge = (from: string, to: string) => {
+    if (graph[from] && graph[from][to] !== undefined) {
+      removedEdges.push([from, to, graph[from][to]]);
+      delete graph[from][to];
+    }
+    if (graph[to] && graph[to][from] !== undefined) {
+      removedEdges.push([to, from, graph[to][from]]);
+      delete graph[to][from];
+    }
+  };
+
+  // Helper to restore all removed edges
+  const restoreEdges = () => {
+    for (const [from, to, weight] of removedEdges) {
+      if (!graph[from]) graph[from] = {};
+      graph[from][to] = weight;
+    }
+    removedEdges.length = 0;
+  };
+
+  // Find the first shortest path
+  const firstPath = findPath(graph, locations, startId, endId);
+  if (!firstPath) return [];
+  paths.push(firstPath);
+
+  for (let i = 1; i < k; i++) {
+    // Remove one edge from the previous shortest path (try each edge in order)
+    let found = false;
+    for (let j = 0; j < paths[i - 1].path.length - 1; j++) {
+      const from = paths[i - 1].path[j];
+      const to = paths[i - 1].path[j + 1];
+      removeEdge(from, to);
+      const altPath = findPath(graph, locations, startId, endId);
+      restoreEdges();
+      if (
+        altPath &&
+        !paths.some((p) => p.path.join() === altPath.path.join())
+      ) {
+        paths.push(altPath);
+        found = true;
+        break;
+      }
+    }
+    if (!found) break; // No more alternatives
+  }
+  return paths;
+};
+
+// Debug: Print all possible paths between two nodes (for testing)
+export const printAllPaths = (
+  graph: { [key: string]: { [key: string]: number } },
+  startId: string,
+  endId: string
+) => {
+  const allPaths: string[][] = [];
+  const visited = new Set<string>();
+  const path: string[] = [];
+
+  function dfs(current: string) {
+    visited.add(current);
+    path.push(current);
+    if (current === endId) {
+      allPaths.push([...path]);
+    } else {
+      for (const neighbor in graph[current] || {}) {
+        if (!visited.has(neighbor)) {
+          dfs(neighbor);
+        }
+      }
+    }
+    path.pop();
+    visited.delete(current);
+  }
+
+  dfs(startId);
+  console.log(`All possible paths from ${startId} to ${endId}:`);
+  allPaths.forEach((p, idx) =>
+    console.log(`Path ${idx + 1}: ${p.join(" -> ")}`)
+  );
+  if (allPaths.length === 0) {
+    console.log("No paths found.");
+  }
+};

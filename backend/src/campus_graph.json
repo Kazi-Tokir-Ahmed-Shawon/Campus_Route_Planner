@@ -42,6 +42,11 @@
     { "source": "26", "target": "path5" },
     { "source": "27", "target": "26" },
     { "source": "28", "target": "27" },
-    { "source": "29", "target": "28" }
+    { "source": "29", "target": "28" },
+    { "source": "path2", "target": "path5" },
+    { "source": "7", "target": "9" },
+    { "source": "4", "target": "path3" },
+    { "source": "5", "target": "path3" },
+    { "source": "8", "target": "9" }
   ]
 }

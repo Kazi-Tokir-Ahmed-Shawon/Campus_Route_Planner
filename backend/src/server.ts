@@ -4,8 +4,8 @@ import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import { getLocationById, getAllLocations } from "./data";
-import { buildGraphFromJSON } from "./graph";
-import { findPath } from "./astar";
+import { buildGraphFromJSON, buildGraphWithObstacles } from "./graph";
+import { findPath, findKShortestPaths, printAllPaths } from "./astar";
 import axios from "axios";
 
 interface OSRMRoute {
@@ -22,7 +22,7 @@ interface OSRMResponse {
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 
 // Middleware
 app.use(helmet());
@@ -55,7 +55,7 @@ app.get("/api/hello", (req, res) => {
 
 // Route finding endpoint
 app.post("/api/route", async (req, res) => {
-  const { start, end } = req.body;
+  const { start, end, restriction } = req.body;
 
   if (!start || !end) {
     return res
@@ -70,36 +70,54 @@ app.post("/api/route", async (req, res) => {
     return res.status(404).json({ error: "One or both locations not found." });
   }
 
-  // Build the graph from our JSON file and find the path using A*
-  const { adjacencyList, allNodes } = buildGraphFromJSON();
-  const result = findPath(adjacencyList, allNodes, start, end);
+  // Use the obstacle-aware graph for the given restriction (default: 'disabled')
+  const restrictionType = restriction || "disabled";
+  const { adjacencyList, allNodes } = buildGraphWithObstacles(restrictionType);
 
-  if (!result) {
-    return res
-      .status(404)
-      .json({ error: "No path found between the selected locations." });
+  // Debug: Print all possible paths between two nodes for a test case
+  printAllPaths(adjacencyList, "7", "9");
+
+  // Find up to 3 alternative routes (including the shortest)
+  const k = 3;
+  const routes = findKShortestPaths(adjacencyList, allNodes, start, end, k);
+
+  if (!routes || routes.length === 0) {
+    return res.status(404).json({
+      error: `No path found between the selected locations for restriction '${restrictionType}'.`,
+    });
   }
 
-  // We have the waypoints from our A* algorithm.
-  // Convert the path of IDs to an array of coordinates for the LineString.
-  const waypoints = result.path.map((id) => {
-    const location = allNodes[id];
-    return [location.lng, location.lat];
-  });
+  // Debug: Log the number of routes and their node paths
+  console.log(
+    `Found ${routes.length} route(s) for ${start} -> ${end} (restriction: ${restrictionType})`
+  );
+  routes.forEach((r, idx) =>
+    console.log(`Route ${idx + 1}: ${r.path ? r.path.join(" -> ") : "no path"}`)
+  );
 
-  const distanceInMeters = result.distance * 111139; // Approximate conversion
-
-  const directions = result.path.map((id, index) => {
-    const name = getLocationById(id)?.name || `Intersection ${id}`;
-    if (index === 0) return `Start at ${name}`;
-    return `Proceed to ${name}`;
+  // Format all routes for the frontend
+  const formattedRoutes = routes.map((result, idx) => {
+    const waypoints = result.path.map((id) => {
+      const location = allNodes[id];
+      return [location.lng, location.lat];
+    });
+    const distanceInMeters = result.distance * 111139; // Approximate conversion
+    const directions = result.path.map((id, index) => {
+      const name = getLocationById(id)?.name || `Intersection ${id}`;
+      if (index === 0) return `Start at ${name}`;
+      return `Proceed to ${name}`;
+    });
+    directions.push(`You have arrived.`);
+    return {
+      waypoints,
+      distance: distanceInMeters,
+      directions,
+      isShortest: idx === 0,
+    };
   });
-  directions.push(`You have arrived.`);
 
   return res.json({
-    waypoints: waypoints,
-    distance: distanceInMeters,
-    directions,
+    routes: formattedRoutes,
   });
 });
 

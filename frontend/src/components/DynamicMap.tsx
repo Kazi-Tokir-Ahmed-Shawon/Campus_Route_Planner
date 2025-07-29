@@ -13,22 +13,28 @@ const MapComponent = dynamic(() => import("./Map"), {
 interface DynamicMapProps {
   geoJsonData: FeatureCollection | null;
   routeGeoJson: FeatureCollection | null;
+  allRoutes?: FeatureCollection[];
   startPoint: [number, number] | null;
   endPoint: [number, number] | null;
+  obstacles?: any[];
 }
 
 const DynamicMap = ({
   geoJsonData,
   routeGeoJson,
+  allRoutes = [],
   startPoint,
   endPoint,
+  obstacles = [],
 }: DynamicMapProps) => {
   return (
     <MapComponent
       geoJsonData={geoJsonData}
       routeGeoJson={routeGeoJson}
+      allRoutes={allRoutes}
       startPoint={startPoint}
       endPoint={endPoint}
+      obstacles={obstacles}
     />
   );
 };

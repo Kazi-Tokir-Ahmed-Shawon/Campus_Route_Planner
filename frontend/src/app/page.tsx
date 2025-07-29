@@ -36,15 +36,17 @@ export default function Home() {
   );
   const [locations, setLocations] = useState<Location[]>([]);
   const [route, setRoute] = useState<FeatureCollection | null>(null);
+  const [allRoutes, setAllRoutes] = useState<FeatureCollection[]>([]);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDirections, setRouteDirections] = useState<string[] | null>(null);
   const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
   const [endPoint, setEndPoint] = useState<[number, number] | null>(null);
+  const [obstacles, setObstacles] = useState<any[]>([]);
 
   const checkBackendHealth = useCallback(async () => {
     setBackendStatus(null); // Reset status on new check
     try {
-      const response = await fetch("http://localhost:5001/api/health");
+      const response = await fetch("http://localhost:5002/api/health");
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -94,13 +96,27 @@ export default function Home() {
       }
     };
 
+    const fetchObstacles = async () => {
+      try {
+        const response = await fetch("/obstacles.json");
+        if (response.ok) {
+          const data = await response.json();
+          setObstacles(data.obstacles || []);
+        }
+      } catch (err) {
+        // Ignore obstacle fetch errors for now
+      }
+    };
+
     checkBackendHealth();
     fetchMapData();
+    fetchObstacles();
   }, [checkBackendHealth]);
 
   const handleRouteFind = async (start: string, end: string) => {
     // 1. Clear previous route
     setRoute(null);
+    setAllRoutes([]);
     setRouteDistance(null);
     setRouteDirections(null);
     setStartPoint(null);
@@ -108,11 +124,12 @@ export default function Home() {
     setError(null);
 
     try {
-      // 2. Get the waypoints from our backend
-      const backendResponse = await fetch("http://localhost:5001/api/route", {
+      // 2. Get the routes from our backend
+      const restriction = "disabled"; // Hardcoded for now, can be made user-selectable
+      const backendResponse = await fetch("http://localhost:5002/api/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start, end }),
+        body: JSON.stringify({ start, end, restriction }),
       });
 
       if (!backendResponse.ok) {
@@ -122,54 +139,51 @@ export default function Home() {
         );
       }
 
-      const { waypoints, directions } = await backendResponse.json();
+      const { routes } = await backendResponse.json();
+      if (!routes || routes.length === 0) throw new Error("No routes found");
 
-      // 3. Call OSRM from the frontend to get the detailed geometry
-      const waypointString = waypoints
-        .map((p: [number, number]) => `${p[0]},${p[1]}`)
-        .join(";");
-      const osrmUrl = `http://router.project-osrm.org/route/v1/foot/${waypointString}?overview=full&geometries=geojson`;
-
-      const osrmResponse = await fetch(osrmUrl);
-      if (!osrmResponse.ok) {
-        throw new Error("Failed to fetch detailed route from OSRM");
+      // For each route, fetch OSRM geometry
+      const osrmRoutes: FeatureCollection[] = [];
+      for (const routeObj of routes) {
+        const startCoord = routeObj.waypoints[0];
+        const endCoord = routeObj.waypoints[routeObj.waypoints.length - 1];
+        const waypointString = `${startCoord[0]},${startCoord[1]};${endCoord[0]},${endCoord[1]}`;
+        const osrmUrl = `http://router.project-osrm.org/route/v1/foot/${waypointString}?overview=full&geometries=geojson`;
+        const osrmResponse = await fetch(osrmUrl);
+        if (!osrmResponse.ok) continue;
+        const osrmData = await osrmResponse.json();
+        if (
+          osrmData.code !== "Ok" ||
+          !osrmData.routes ||
+          osrmData.routes.length === 0
+        ) {
+          continue;
+        }
+        const routeGeometry = osrmData.routes[0].geometry;
+        osrmRoutes.push({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: { isShortest: routeObj.isShortest },
+              geometry: routeGeometry,
+            },
+          ],
+        });
       }
-      const osrmData = await osrmResponse.json();
-
-      if (
-        osrmData.code !== "Ok" ||
-        !osrmData.routes ||
-        osrmData.routes.length === 0
-      ) {
-        throw new Error(
-          "OSRM could not find a valid route for the given waypoints."
-        );
+      setAllRoutes(osrmRoutes);
+      // Set the shortest route as the main highlighted route
+      if (osrmRoutes.length > 0) {
+        setRoute(osrmRoutes[0]);
+        setRouteDistance(routes[0].distance);
+        setRouteDirections(routes[0].directions);
+        const routeCoords = osrmRoutes[0].features[0].geometry.coordinates;
+        setStartPoint([routeCoords[0][1], routeCoords[0][0]]);
+        setEndPoint([
+          routeCoords[routeCoords.length - 1][1],
+          routeCoords[routeCoords.length - 1][0],
+        ]);
       }
-
-      // 4. Set the state with the new data
-      const routeGeometry = osrmData.routes[0].geometry;
-      const routeGeoJson = {
-        type: "FeatureCollection" as const,
-        features: [
-          {
-            type: "Feature" as const,
-            properties: {},
-            geometry: routeGeometry,
-          },
-        ],
-      };
-
-      setRoute(routeGeoJson);
-      setRouteDistance(osrmData.routes[0].distance);
-      setRouteDirections(directions); // Use our own more readable directions
-
-      // Set start and end points for special markers
-      const routeCoords = routeGeometry.coordinates;
-      setStartPoint([routeCoords[0][1], routeCoords[0][0]]); // Leaflet is [lat, lng]
-      setEndPoint([
-        routeCoords[routeCoords.length - 1][1],
-        routeCoords[routeCoords.length - 1][0],
-      ]);
     } catch (error) {
       console.error("Error finding route:", error);
       setError(
@@ -217,8 +231,10 @@ export default function Home() {
               <DynamicMap
                 geoJsonData={geoJsonData}
                 routeGeoJson={route}
+                allRoutes={allRoutes}
                 startPoint={startPoint}
                 endPoint={endPoint}
+                obstacles={obstacles}
               />
             </div>
             {error && (
