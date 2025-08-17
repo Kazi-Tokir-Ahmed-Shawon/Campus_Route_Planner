@@ -180,7 +180,7 @@ const calculateTime = (distance: number, mode: string): number => {
 
 The backend now provides **accurate, mode-specific calculations** that make logical sense:
 
-- ✅ Cycling is faster than walking
-- ✅ Accessibility routes consider obstacles properly
-- ✅ Real-time calculations based on actual route data
-- ✅ Consistent and predictable results across all modes
+- Cycling is faster than walking
+- Accessibility routes consider obstacles properly
+- Real-time calculations based on actual route data
+- Consistent and predictable results across all modes
