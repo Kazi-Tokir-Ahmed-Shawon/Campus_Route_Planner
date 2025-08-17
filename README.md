@@ -1,4 +1,4 @@
-# Campus Route Planner Application
+# Campus Map Application
 
 A full-stack campus navigation and information system built with Next.js frontend and Node.js backend.
 
@@ -17,7 +17,6 @@ campus-map/
 │   └── package.json
 └── README.md
 ```
-
 
 
 ### Prerequisites
@@ -89,7 +88,7 @@ The frontend will be running on `http://localhost:3000`
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
 
-##  API Endpoints
+## API Endpoints
 
 ### Health Check
 
@@ -99,7 +98,7 @@ The frontend will be running on `http://localhost:3000`
 
 - `GET /api/hello` - Sample API response
 
-##  Features
+## Features
 
 - **Interactive Map Interface** - Navigate through campus buildings and facilities
 - **Real-time Updates** - Get live campus information and announcements
@@ -107,14 +106,14 @@ The frontend will be running on `http://localhost:3000`
 - **Backend Health Monitoring** - Real-time backend status checking
 - **Responsive Design** - Works on desktop and mobile devices
 
-##  Security Features
+## Security Features
 
 - CORS configuration for secure cross-origin requests
 - Helmet.js for security headers
 - Environment variable management
 - Input validation and sanitization
 
-##  Tech Stack
+## Tech Stack
 
 ### Frontend
 
@@ -133,19 +132,21 @@ The frontend will be running on `http://localhost:3000`
 - **Morgan** - HTTP request logger
 - **Dotenv** - Environment variable management
 
-##  Development Workflow
+## 🔄 Development Workflow
 
 1. Start both servers in separate terminals
 2. Make changes to frontend or backend code
 3. Changes will automatically reload (hot reload enabled)
 4. Test API endpoints using the health check feature
 
-##  Environment Variables
+## 📝 Environment Variables
 
 ### Backend (.env)
 
 ```env
-PORT=5001
+PORT=5000
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
 ```
+
+

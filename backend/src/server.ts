@@ -4,7 +4,11 @@ import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import { getLocationById, getAllLocations } from "./data";
-import { buildGraphFromJSON, buildGraphWithObstacles } from "./graph";
+import {
+  buildGraphFromJSON,
+  buildGraphWithObstacles,
+  calculateTime,
+} from "./graph";
 import { findPath, findKShortestPaths, printAllPaths } from "./astar";
 import axios from "axios";
 
@@ -82,8 +86,17 @@ app.post("/api/route", async (req, res) => {
   const routes = findKShortestPaths(adjacencyList, allNodes, start, end, k);
 
   if (!routes || routes.length === 0) {
+    const modeDisplayName =
+      restrictionType === "walk"
+        ? "pedestrian"
+        : restrictionType === "cycle"
+        ? "cycling"
+        : restrictionType === "disabled"
+        ? "accessibility"
+        : restrictionType;
+
     return res.status(404).json({
-      error: `No path found between the selected locations for restriction '${restrictionType}'.`,
+      error: `No ${modeDisplayName} route found between the selected locations. This may be due to obstacles or restrictions that block all possible paths. Try selecting a different mode or different start/end points.`,
     });
   }
 
@@ -95,29 +108,56 @@ app.post("/api/route", async (req, res) => {
     console.log(`Route ${idx + 1}: ${r.path ? r.path.join(" -> ") : "no path"}`)
   );
 
-  // Format all routes for the frontend
+  // Format all routes for the frontend with both distance and time
   const formattedRoutes = routes.map((result, idx) => {
     const waypoints = result.path.map((id) => {
       const location = allNodes[id];
       return [location.lng, location.lat];
     });
-    const distanceInMeters = result.distance * 111139; // Approximate conversion
+
+    const distanceInMeters = Math.round(result.distance); // Distance in meters
+    const timeInSeconds = calculateTime(distanceInMeters, restrictionType);
+
+    // Convert time to human-readable format
+    const timeInMinutes = Math.round(timeInSeconds / 60);
+    const timeDisplay =
+      timeInMinutes < 1
+        ? `${Math.round(timeInSeconds)}s`
+        : `${timeInMinutes}m ${Math.round(timeInSeconds % 60)}s`;
+
     const directions = result.path.map((id, index) => {
       const name = getLocationById(id)?.name || `Intersection ${id}`;
       if (index === 0) return `Start at ${name}`;
       return `Proceed to ${name}`;
     });
     directions.push(`You have arrived.`);
+
     return {
       waypoints,
       distance: distanceInMeters,
+      time: timeInSeconds,
+      timeDisplay,
       directions,
       isShortest: idx === 0,
+      mode: restrictionType,
+      // Mode-specific information
+      modeInfo: {
+        walk: restrictionType === "walk",
+        cycle: restrictionType === "cycle",
+        disabled: restrictionType === "disabled",
+      },
     };
   });
 
   return res.json({
     routes: formattedRoutes,
+    mode: restrictionType,
+    summary: {
+      totalRoutes: formattedRoutes.length,
+      shortestDistance: formattedRoutes[0].distance,
+      shortestTime: formattedRoutes[0].timeDisplay,
+      mode: restrictionType,
+    },
   });
 });
 

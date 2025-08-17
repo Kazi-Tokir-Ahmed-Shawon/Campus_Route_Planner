@@ -19,10 +19,18 @@ const heuristic = (
   loc1: { lat: number; lng: number },
   loc2: { lat: number; lng: number }
 ): number => {
-  // Euclidean distance as the heuristic
-  const dx = loc1.lng - loc2.lng;
-  const dy = loc1.lat - loc2.lat;
-  return Math.sqrt(dx * dx + dy * dy);
+  // Proper Haversine distance as the heuristic
+  const R = 6371000; // Earth's radius in meters
+  const dLat = ((loc2.lat - loc1.lat) * Math.PI) / 180;
+  const dLng = ((loc2.lng - loc1.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((loc1.lat * Math.PI) / 180) *
+      Math.cos((loc2.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in meters
 };
 
 export const findPath = (
@@ -56,7 +64,18 @@ export const findPath = (
         path.push(temp.id);
         temp = temp.parent;
       }
-      return { path: path.reverse(), distance: currentNode.g };
+
+      // Calculate total distance along the path
+      let totalDistance = 0;
+      for (let i = 0; i < path.length - 1; i++) {
+        const currentId = path[i];
+        const nextId = path[i + 1];
+        if (graph[currentId] && graph[currentId][nextId] !== undefined) {
+          totalDistance += graph[currentId][nextId];
+        }
+      }
+
+      return { path: path.reverse(), distance: totalDistance };
     }
 
     closedSet.add(currentNode.id);
@@ -151,6 +170,10 @@ export const findKShortestPaths = (
     }
     if (!found) break; // No more alternatives
   }
+
+  // Sort paths by distance to ensure they're in order
+  paths.sort((a, b) => a.distance - b.distance);
+
   return paths;
 };
 
