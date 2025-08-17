@@ -132,19 +132,19 @@ The frontend will be running on `http://localhost:3000`
 - **Morgan** - HTTP request logger
 - **Dotenv** - Environment variable management
 
-## 🔄 Development Workflow
+## Development Workflow
 
 1. Start both servers in separate terminals
 2. Make changes to frontend or backend code
 3. Changes will automatically reload (hot reload enabled)
 4. Test API endpoints using the health check feature
 
-## 📝 Environment Variables
+##  Environment Variables
 
 ### Backend (.env)
 
 ```env
-PORT=5000
+PORT=5002
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
 ```
