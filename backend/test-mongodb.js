@@ -18,7 +18,7 @@ async function testConnection() {
     // Test database operations
     const db = mongoose.connection.db;
     const collections = await db.listCollections().toArray();
-    console.log('📚 Available collections:', collections.map(c => c.name));
+    console.log('Available collections:', collections.map(c => c.name));
     
     await mongoose.disconnect();
     console.log('✅ Connection test completed successfully!');
