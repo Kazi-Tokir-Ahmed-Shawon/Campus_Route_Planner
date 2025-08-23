@@ -14,7 +14,6 @@ interface CampusLocation {
 interface DirectionsResult {
   distance: string;
   duration: string;
-  route: google.maps.LatLng[];
 }
 
 export default function AllCampusMapPage() {
@@ -30,29 +29,32 @@ export default function AllCampusMapPage() {
   const [directionsResult, setDirectionsResult] =
     useState<DirectionsResult | null>(null);
   const [travelMode, setTravelMode] = useState<string>("DRIVING");
-  const [apiKey, setApiKey] = useState<string>("");
-  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
-
   const mapRef = useRef<HTMLDivElement>(null);
 
+  // Load campus locations on component mount
   useEffect(() => {
     fetchCampusLocations();
   }, []);
+
+  // Initialize map when locations are loaded
+  useEffect(() => {
+    if (campusLocations.length > 0 && !map) {
+      initializeMap();
+    }
+  }, [campusLocations, map]);
 
   const fetchCampusLocations = async () => {
     try {
       const response = await fetch("/USW_All_Campuses.json");
       if (response.ok) {
         const data = await response.json();
-        const locationsArray = Object.entries(data).map(
-          ([id, loc]: [string, unknown]) => ({
-            id,
-            name: (loc as CampusLocation).name,
-            label: (loc as CampusLocation).label,
-            lat: (loc as CampusLocation).lat,
-            lng: (loc as CampusLocation).lng,
-          })
-        );
+        const locationsArray = Object.entries(data).map(([id, loc]) => ({
+          id,
+          name: (loc as CampusLocation).name,
+          label: (loc as CampusLocation).label,
+          lat: (loc as CampusLocation).lat,
+          lng: (loc as CampusLocation).lng,
+        }));
         setCampusLocations(locationsArray);
       }
     } catch (error) {
@@ -63,20 +65,23 @@ export default function AllCampusMapPage() {
   };
 
   const initializeMap = async () => {
-    if (!apiKey || !mapRef.current) return;
+    if (!mapRef.current) return;
 
     try {
+      // Load Google Maps API
       const loader = new Loader({
-        apiKey: apiKey,
+        apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
         version: "weekly",
         libraries: ["places"],
       });
 
       const google = await loader.load();
 
+      // Create map instance
       const mapInstance = new google.maps.Map(mapRef.current, {
         center: { lat: 51.58937482501967, lng: -3.3306255895333994 }, // Treforest campus as center
         zoom: 10,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
         styles: [
           {
             featureType: "poi",
@@ -86,9 +91,10 @@ export default function AllCampusMapPage() {
         ],
       });
 
+      // Initialize directions service and renderer
       const directionsServiceInstance = new google.maps.DirectionsService();
       const directionsRendererInstance = new google.maps.DirectionsRenderer({
-        suppressMarkers: true,
+        suppressMarkers: true, // Don't show default A/B markers
         polylineOptions: {
           strokeColor: "#3B82F6",
           strokeWeight: 5,
@@ -97,10 +103,6 @@ export default function AllCampusMapPage() {
       });
 
       directionsRendererInstance.setMap(mapInstance);
-
-      setMap(mapInstance);
-      setDirectionsService(directionsServiceInstance);
-      setDirectionsRenderer(directionsRendererInstance);
 
       // Add markers for all campus locations
       campusLocations.forEach((location) => {
@@ -117,10 +119,12 @@ export default function AllCampusMapPage() {
         // Add info window
         const infoWindow = new google.maps.InfoWindow({
           content: `
-            <div class="p-2">
-              <h3 class="font-semibold text-lg">${location.name}</h3>
-              <p class="text-sm text-gray-600">${location.label}</p>
-              <p class="text-xs text-gray-500">${location.lat.toFixed(
+            <div style="padding: 10px; min-width: 200px;">
+              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">${
+                location.name
+              }</h3>
+              <p style="margin: 0 0 4px 0; color: #666;">${location.label}</p>
+              <p style="margin: 0; font-size: 12px; color: #999;">${location.lat.toFixed(
                 6
               )}, ${location.lng.toFixed(6)}</p>
             </div>
@@ -131,17 +135,21 @@ export default function AllCampusMapPage() {
           infoWindow.open(mapInstance, marker);
         });
       });
+
+      // Fit map to show all markers
+      if (campusLocations.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        campusLocations.forEach((location) => {
+          bounds.extend({ lat: location.lat, lng: location.lng });
+        });
+        mapInstance.fitBounds(bounds);
+      }
+
+      setMap(mapInstance);
+      setDirectionsService(directionsServiceInstance);
+      setDirectionsRenderer(directionsRendererInstance);
     } catch (error) {
       console.error("Error initializing map:", error);
-      setShowApiKeyInput(true);
-    }
-  };
-
-  const handleApiKeySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (apiKey.trim()) {
-      setShowApiKeyInput(false);
-      initializeMap();
     }
   };
 
@@ -179,7 +187,6 @@ export default function AllCampusMapPage() {
         setDirectionsResult({
           distance: leg.distance?.text || "Unknown",
           duration: leg.duration?.text || "Unknown",
-          route: route.overview_path || [],
         });
 
         // Fit map to show the entire route
@@ -234,149 +241,14 @@ export default function AllCampusMapPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">All Campus Map</h1>
           <p className="mt-2 text-gray-600">
-            View all USW campuses and get real-time directions
+            View all USW campuses across Wales
           </p>
         </div>
 
-        {/* API Key Input */}
-        {showApiKeyInput && (
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Google Maps API Key Required
-            </h2>
-            <p className="text-gray-600 mb-4">
-              To use the interactive map features, please enter your Google Maps
-              API key. You can get one from the{" "}
-              <a
-                href="https://console.cloud.google.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                Google Cloud Console
-              </a>
-              .
-            </p>
-            <form onSubmit={handleApiKeySubmit} className="flex gap-4">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your Google Maps API key"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Load Map
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Route Planning Controls */}
-        {!showApiKeyInput && (
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Plan Route Between Campuses
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From
-                </label>
-                <select
-                  value={selectedStart}
-                  onChange={(e) => setSelectedStart(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select start campus</option>
-                  {campusLocations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  To
-                </label>
-                <select
-                  value={selectedEnd}
-                  onChange={(e) => setSelectedEnd(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select destination campus</option>
-                  {campusLocations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Travel Mode
-                </label>
-                <select
-                  value={travelMode}
-                  onChange={(e) => setTravelMode(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="DRIVING">Driving</option>
-                  <option value="WALKING">Walking</option>
-                  <option value="BICYCLING">Bicycling</option>
-                  <option value="TRANSIT">Transit</option>
-                </select>
-              </div>
-
-              <div className="flex items-end space-x-2">
-                <button
-                  onClick={calculateRoute}
-                  disabled={!selectedStart || !selectedEnd}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  Get Route
-                </button>
-                <button
-                  onClick={clearRoute}
-                  className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-
-            {/* Route Results */}
-            {directionsResult && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-blue-900 mb-2">
-                  Route Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium text-blue-800">Distance:</span>{" "}
-                    {directionsResult.distance}
-                  </div>
-                  <div>
-                    <span className="font-medium text-blue-800">Duration:</span>{" "}
-                    {directionsResult.duration}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Campus Locations List */}
+        {/* Campus Locations Summary */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            All Campus Locations
+            Campus Locations ({campusLocations.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {campusLocations.map((location) => (
@@ -395,22 +267,115 @@ export default function AllCampusMapPage() {
           </div>
         </div>
 
-        {/* Map Container */}
-        {!showApiKeyInput && (
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Interactive Map
-            </h2>
-            <div
-              ref={mapRef}
-              className="w-full h-96 rounded-lg border border-gray-200"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Click on markers to see campus information. Use the route planner
-              above to get directions between campuses.
-            </p>
+        {/* Route Planning Controls */}
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Plan Route Between Campuses
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                From
+              </label>
+              <select
+                value={selectedStart}
+                onChange={(e) => setSelectedStart(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select start campus</option>
+                {campusLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                To
+              </label>
+              <select
+                value={selectedEnd}
+                onChange={(e) => setSelectedEnd(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select destination campus</option>
+                {campusLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Travel Mode
+              </label>
+              <select
+                value={travelMode}
+                onChange={(e) => setTravelMode(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="DRIVING">Driving</option>
+                <option value="WALKING">Walking</option>
+                <option value="BICYCLING">Bicycling</option>
+                <option value="TRANSIT">Transit</option>
+              </select>
+            </div>
+
+            <div className="flex items-end space-x-2">
+              <button
+                onClick={calculateRoute}
+                disabled={!selectedStart || !selectedEnd}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Get Route
+              </button>
+              <button
+                onClick={clearRoute}
+                className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Clear
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Route Results */}
+          {directionsResult && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-blue-900 mb-2">
+                Route Information
+              </h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-blue-800">Distance:</span>{" "}
+                  {directionsResult.distance}
+                </div>
+                <div>
+                  <span className="font-medium text-blue-800">Duration:</span>{" "}
+                  {directionsResult.duration}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Map Container */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Interactive Map
+          </h2>
+          <div
+            ref={mapRef}
+            className="w-full h-96 rounded-lg border border-gray-200"
+          />
+          <p className="text-sm text-gray-500 mt-2">
+            Click on markers to see campus information. The map automatically
+            centers to show all campuses.
+          </p>
+        </div>
       </div>
     </div>
   );

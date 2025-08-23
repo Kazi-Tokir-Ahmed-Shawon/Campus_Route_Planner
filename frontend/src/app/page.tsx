@@ -1,22 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import DynamicMap from "@/components/DynamicMap";
 import RouteControl from "@/components/RouteControl";
 import RouteDetails from "@/components/RouteDetails";
 import { FeatureCollection } from "geojson";
-
-interface Location {
-  id: string;
-  name: string;
-}
-
-interface RawLocation {
-  name: string;
-  label: string;
-  lat: number;
-  lng: number;
-}
+import { useStore } from "@/store/useStore";
+import { useDataFetching } from "@/hooks/useDataFetching";
 
 interface BackendStatus {
   status: string;
@@ -25,6 +15,28 @@ interface BackendStatus {
 }
 
 export default function Home() {
+  // Zustand store
+  const {
+    treeforestLocations,
+    obstacles,
+    backendStatus: storeBackendStatus,
+  } = useStore();
+
+  // Data fetching hook
+  const { fetchAllData } = useDataFetching();
+
+  // Filter obstacles to only show the ones from obstacles.json (not from database)
+  const filteredObstacles = obstacles.filter(
+    (obs) =>
+      obs.id.startsWith("obs_") ||
+      [
+        "Stairs near Library",
+        "Steep Hill behind Tŷ Crawshay",
+        "Narrow Alley near Accommodation",
+      ].includes(obs.name)
+  );
+
+  // Local state
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(
     null
   );
@@ -34,10 +46,40 @@ export default function Home() {
     "planning"
   );
 
+  // Trigger data fetching on mount
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  // Global error handler for unhandled errors
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Global error caught:", event.error);
+      // Prevent the error from crashing the app
+      event.preventDefault();
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      // Prevent the error from crashing the app
+      event.preventDefault();
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener(
+        "unhandledrejection",
+        handleUnhandledRejection
+      );
+    };
+  }, []);
+
   const [geoJsonData, setGeoJsonData] = useState<FeatureCollection | null>(
     null
   );
-  const [locations, setLocations] = useState<Location[]>([]);
   const [route, setRoute] = useState<FeatureCollection | null>(null);
   const [allRoutes, setAllRoutes] = useState<FeatureCollection[]>([]);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
@@ -57,85 +99,76 @@ export default function Home() {
   const [endPoint, setEndPoint] = useState<[number, number] | null>(null);
   const [currentMode, setCurrentMode] = useState<string>("walk");
   const [hasStairs, setHasStairs] = useState<boolean>(false);
-  const [obstacles, setObstacles] = useState<
-    Array<{
-      id: string;
-      name: string;
-      lat: number;
-      lng: number;
-      restricted_for: string[];
-    }>
-  >([]);
-
-  const checkBackendHealth = useCallback(async () => {
-    setBackendStatus(null);
-    try {
-      const response = await fetch("http://localhost:5002/api/health");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setBackendStatus(data);
-    } catch (err) {
-      console.error("Backend connection failed:", err);
-      setBackendStatus({
-        status: "Error",
-        message: "Failed to connect",
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }, []);
 
   useEffect(() => {
     const fetchMapData = async () => {
       try {
-        const response = await fetch("/USW_Treeforest_campus_map.json");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch GeoJSON: ${response.statusText}`);
+        // Use Zustand store data instead of fetching JSON directly
+        if (treeforestLocations.length > 0) {
+          const features = treeforestLocations.map((location) => ({
+            type: "Feature" as const,
+            properties: { name: location.name, label: location.label },
+            geometry: {
+              type: "Point" as const,
+              coordinates: [location.lng, location.lat],
+            },
+          }));
+
+          setGeoJsonData({ type: "FeatureCollection", features });
+          setLoading(false);
         }
-        const rawData: { [key: string]: RawLocation } = await response.json();
-
-        const locationList = Object.entries(rawData).map(([id, loc]) => ({
-          id: id,
-          name: loc.name,
-        }));
-        setLocations(locationList);
-
-        const features = Object.values(rawData).map((location) => ({
-          type: "Feature" as const,
-          properties: { name: location.name, label: location.label },
-          geometry: {
-            type: "Point" as const,
-            coordinates: [location.lng, location.lat],
-          },
-        }));
-
-        setGeoJsonData({ type: "FeatureCollection", features });
       } catch (err) {
+        console.error("Error setting map data:", err);
         setError(
           err instanceof Error ? err.message : "An unknown error occurred"
         );
-      } finally {
         setLoading(false);
       }
     };
 
-    const fetchObstacles = async () => {
-      try {
-        const response = await fetch("/obstacles.json");
-        if (response.ok) {
-          const data = await response.json();
-          setObstacles(data.obstacles || []);
-        }
-      } catch {
-        // Ignore obstacle fetch errors for now
-      }
-    };
+    // Update backend status from store
+    if (storeBackendStatus === "connected") {
+      setBackendStatus({
+        status: "OK",
+        message: "Connected to database",
+        timestamp: new Date().toISOString(),
+      });
+    } else if (storeBackendStatus === "fallback") {
+      setBackendStatus({
+        status: "Fallback",
+        message: "Using fallback data",
+        timestamp: new Date().toISOString(),
+      });
+    } else if (storeBackendStatus === "disconnected") {
+      setBackendStatus({
+        status: "Error",
+        message: "No data available",
+        timestamp: new Date().toISOString(),
+      });
+    }
 
-    checkBackendHealth();
-    fetchMapData();
-    fetchObstacles();
-  }, [checkBackendHealth]);
+    // Fetch data when store data is available
+    if (treeforestLocations.length > 0) {
+      fetchMapData();
+    } else if (storeBackendStatus === "checking") {
+      // Still checking backend status, keep loading
+      setLoading(true);
+    } else if (
+      storeBackendStatus === "fallback" ||
+      storeBackendStatus === "connected"
+    ) {
+      // Data should be available, but if not, try to fetch
+      if (treeforestLocations.length === 0) {
+        // Import and use the data fetching hook
+        try {
+          fetchAllData();
+        } catch (err) {
+          console.error("Error fetching data:", err);
+          setError("Failed to fetch data");
+        }
+      }
+    }
+  }, [treeforestLocations, storeBackendStatus, fetchAllData]);
 
   const handleRouteFind = async (start: string, end: string, mode: string) => {
     // 1. Clear previous route
@@ -154,7 +187,7 @@ export default function Home() {
     try {
       // 2. Get the routes from our backend
       const restriction = mode; // Use the selected mode
-      const backendResponse = await fetch("http://localhost:5002/api/route", {
+      const backendResponse = await fetch("http://localhost:5001/api/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ start, end, restriction }),
@@ -270,14 +303,57 @@ export default function Home() {
               className={`status-indicator ${
                 backendStatus?.status === "OK"
                   ? "status-connected"
+                  : backendStatus?.status === "Fallback"
+                  ? "status-fallback"
                   : "status-disconnected"
               }`}
             ></div>
             <span className="text-sm text-gray-600">
-              {backendStatus?.status === "OK" ? "Connected" : "Disconnected"}
+              {backendStatus?.status === "OK"
+                ? "Connected"
+                : backendStatus?.status === "Fallback"
+                ? "Fallback Mode"
+                : "Disconnected"}
             </span>
           </div>
         </div>
+
+        {/* Status Notification */}
+        {backendStatus && (
+          <div
+            className={`px-6 py-3 text-sm ${
+              backendStatus.status === "OK"
+                ? "bg-green-50 text-green-800 border-b border-green-200"
+                : backendStatus.status === "Fallback"
+                ? "bg-yellow-50 text-yellow-800 border-b border-yellow-200"
+                : "bg-red-50 text-red-800 border-b border-red-200"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span>
+                {backendStatus.status === "OK"
+                  ? "✅ Connected to backend database"
+                  : backendStatus.status === "Fallback"
+                  ? "⚠️ Using fallback data (backend unavailable)"
+                  : "❌ No data available"}
+              </span>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs opacity-75">
+                  {new Date(backendStatus.timestamp).toLocaleTimeString()}
+                </span>
+                {backendStatus.status !== "OK" && (
+                  <button
+                    onClick={fetchAllData}
+                    className="px-2 py-1 text-xs bg-white bg-opacity-50 hover:bg-opacity-75 rounded border border-current transition-colors"
+                    title="Retry connection"
+                  >
+                    🔄 Retry
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
@@ -314,12 +390,21 @@ export default function Home() {
             <div className="p-6 h-full">
               {loading ? (
                 <div className="text-center p-6 bg-gray-50 rounded-lg">
-                  <div className="text-gray-500">Loading...</div>
+                  <div className="text-gray-500">
+                    {storeBackendStatus === "checking"
+                      ? "Checking backend connection..."
+                      : storeBackendStatus === "fallback"
+                      ? "Loading fallback data..."
+                      : "Loading..."}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
                   <RouteControl
-                    locations={locations}
+                    locations={treeforestLocations.map((loc) => ({
+                      id: loc.id,
+                      name: loc.name,
+                    }))}
                     onRouteFind={handleRouteFind}
                   />
 
@@ -363,7 +448,7 @@ export default function Home() {
                     timeDisplay={routeTimeDisplay}
                     modeInfo={routeModeInfo}
                     hasStairs={hasStairs}
-                    obstacles={obstacles}
+                    obstacles={filteredObstacles}
                   />
                 </div>
               ) : (
@@ -412,7 +497,7 @@ export default function Home() {
           allRoutes={allRoutes}
           startPoint={startPoint}
           endPoint={endPoint}
-          obstacles={obstacles}
+          obstacles={filteredObstacles}
           currentMode={currentMode}
         />
       </div>

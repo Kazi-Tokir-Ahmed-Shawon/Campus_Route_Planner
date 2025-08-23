@@ -1,26 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
-interface CampusLocation {
-  id: string;
-  name: string;
-  label: string;
-  lat: number;
-  lng: number;
-}
-
-interface Obstacle {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  restricted_for: string[];
-}
+import { useState, useEffect, useCallback } from "react";
+import { useStore } from "@/store/useStore";
+import { ApiService } from "@/services/api";
+import { Location } from "@/store/useStore";
 
 export default function AdminPage() {
-  const [campusLocations, setCampusLocations] = useState<CampusLocation[]>([]);
-  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
+  // Zustand store
+  const {
+    locations,
+    obstacles,
+    setLocations,
+    setObstacles,
+    addLocation,
+    addObstacle,
+  } = useStore();
+
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"locations" | "obstacles">(
     "locations"
@@ -32,6 +27,7 @@ export default function AdminPage() {
     label: "",
     lat: "",
     lng: "",
+    type: "tree-house-campus" as "all-campus" | "tree-house-campus",
   });
 
   // Form states for new obstacle
@@ -51,36 +47,22 @@ export default function AdminPage() {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      // Fetch campus locations
-      const locationsResponse = await fetch("/USW_All_Campuses.json");
-      if (locationsResponse.ok) {
-        const locationsData = await locationsResponse.json();
-        const locationsArray = Object.entries(locationsData).map(
-          ([id, loc]: [string, unknown]) => ({
-            id,
-            name: (loc as CampusLocation).name,
-            label: (loc as CampusLocation).label,
-            lat: (loc as CampusLocation).lat,
-            lng: (loc as CampusLocation).lng,
-          })
-        );
-        setCampusLocations(locationsArray);
-      }
+      // Fetch data using API service with fallback
+      const [locationsData, obstaclesData] = await Promise.all([
+        ApiService.getLocations(),
+        ApiService.getObstacles(),
+      ]);
 
-      // Fetch obstacles
-      const obstaclesResponse = await fetch("/obstacles.json");
-      if (obstaclesResponse.ok) {
-        const obstaclesData = await obstaclesResponse.json();
-        setObstacles(obstaclesData.obstacles || []);
-      }
+      setLocations(locationsData);
+      setObstacles(obstaclesData);
     } catch {
       setMessage({ type: "error", text: "Failed to fetch data" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLocations, setObstacles]);
 
   const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,21 +78,28 @@ export default function AdminPage() {
     }
 
     try {
-      const newId = (campusLocations.length + 1001).toString();
+      const newId = (locations.length + 1001).toString();
       const locationData = {
         id: newId,
         name: newLocation.name,
         label: newLocation.label,
         lat: parseFloat(newLocation.lat),
         lng: parseFloat(newLocation.lng),
+        type: newLocation.type,
       };
 
-      // In a real app, you'd send this to your backend API
-      // For now, we'll just add it to the local state
-      setCampusLocations((prev) => [...prev, locationData]);
+      // Create location in backend
+      const createdLocation = await ApiService.createLocation(locationData);
+      addLocation(createdLocation);
 
       // Reset form
-      setNewLocation({ name: "", label: "", lat: "", lng: "" });
+      setNewLocation({
+        name: "",
+        label: "",
+        lat: "",
+        lng: "",
+        type: "tree-house-campus",
+      });
       setMessage({
         type: "success",
         text: "New campus location added successfully!",
@@ -118,8 +107,11 @@ export default function AdminPage() {
 
       // Clear message after 3 seconds
       setTimeout(() => setMessage(null), 3000);
-    } catch {
-      setMessage({ type: "error", text: "Failed to add location" });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to add location",
+      });
     }
   };
 
@@ -141,9 +133,9 @@ export default function AdminPage() {
         restricted_for: newObstacle.restricted_for,
       };
 
-      // In a real app, you'd send this to your backend API
-      // For now, we'll just add it to the local state
-      setObstacles((prev) => [...prev, obstacleData]);
+      // Create obstacle in backend
+      const createdObstacle = await ApiService.createObstacle(obstacleData);
+      addObstacle(createdObstacle);
 
       // Reset form
       setNewObstacle({ name: "", lat: "", lng: "", restricted_for: [] });
@@ -151,8 +143,11 @@ export default function AdminPage() {
 
       // Clear message after 3 seconds
       setTimeout(() => setMessage(null), 3000);
-    } catch {
-      setMessage({ type: "error", text: "Failed to add obstacle" });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to add obstacle",
+      });
     }
   };
 
@@ -213,7 +208,11 @@ export default function AdminPage() {
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
             }`}
           >
-            Campus Locations ({campusLocations.length})
+            Campus Locations (
+            {locations.filter((loc) => loc.type === "tree-house-campus")
+              .length +
+              locations.filter((loc) => loc.type === "all-campus").length}
+            )
           </button>
           <button
             onClick={() => setActiveTab("obstacles")}
@@ -306,6 +305,28 @@ export default function AdminPage() {
                       placeholder="e.g., -3.3306255895333994"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type
+                    </label>
+                    <select
+                      value={newLocation.type}
+                      onChange={(e) =>
+                        setNewLocation((prev) => ({
+                          ...prev,
+                          type: e.target.value as
+                            | "all-campus"
+                            | "tree-house-campus",
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="tree-house-campus">
+                        Treeforest Campus
+                      </option>
+                      <option value="all-campus">All Campus</option>
+                    </select>
+                  </div>
                 </div>
                 <button
                   type="submit"
@@ -316,9 +337,72 @@ export default function AdminPage() {
               </form>
             </div>
 
+            {/* Treeforest Campus Locations */}
             <div className="bg-white shadow rounded-lg p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Existing Campus Locations
+                Treeforest Campus Locations (
+                {
+                  locations.filter((loc) => loc.type === "tree-house-campus")
+                    .length
+                }
+                )
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Label
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Room Code
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Coordinates
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {locations
+                      .filter(
+                        (location: Location) =>
+                          location.type === "tree-house-campus"
+                      )
+                      .map((location: Location) => (
+                        <tr key={location.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {location.id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.label}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {location.room_code || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* All Campus Locations */}
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                All Campus Locations (
+                {locations.filter((loc) => loc.type === "all-campus").length})
               </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -339,22 +423,26 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {campusLocations.map((location) => (
-                      <tr key={location.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {location.id}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {location.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {location.label}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                        </td>
-                      </tr>
-                    ))}
+                    {locations
+                      .filter(
+                        (location: Location) => location.type === "all-campus"
+                      )
+                      .map((location: Location) => (
+                        <tr key={location.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {location.id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.label}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
