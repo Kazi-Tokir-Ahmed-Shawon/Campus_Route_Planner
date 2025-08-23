@@ -1,0 +1,158 @@
+{
+  "obstacles": [
+    {
+      "id": "obs_1",
+      "name": "Stairs near Library",
+      "lat": 51.58938339628579,
+      "lng": -3.32769423157787,
+      "restricted_for": [
+        "disabled",
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_2",
+      "name": "Steep Hill behind T\u0177 Crawshay",
+      "lat": 51.58853673514925,
+      "lng":  -3.3262397447107257,
+      "restricted_for": [
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_3",
+      "name": "Narrow Alley near Accommodation",
+      "lat": 51.58881888062186,
+      "lng": -3.329696750076328,
+      "restricted_for": [
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_4",
+      "name": "Construction Zone near Engineering Centre",
+      "lat": 51.58937801174348,
+      "lng": -3.3266501220969706,
+      "restricted_for": [
+        "walk",
+        "cycle",
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_5",
+      "name": "Vehicle-only Access Road",
+      "lat": 51.58856447636156,
+      "lng": -3.325244684623766,
+      "restricted_for": [
+        "walk",
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_6",
+      "name": "Stairs behind Students\u2019 Union",
+      "lat": 51.58781466231342,
+      "lng": -3.3283516919262284,
+      "restricted_for": [
+        "disabled",
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_7",
+      "name": "Gravel path behind Glamorgan Court",
+      "lat": 51.59033533967737,
+      "lng":  -3.331436352349916,
+      "restricted_for": [
+        "disabled",
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_8",
+      "name": "Construction at Mountain Halls walkway",
+      "lat": 51.58900788903314,
+      "lng":  -3.330721703647723,
+      "restricted_for": [
+        "walk",
+        "cycle",
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_9",
+      "name": "Steep ramp beside Sports Centre",
+      "lat": 51.58822057319749,
+      "lng": -3.328235752054985,
+      "restricted_for": [
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_10",
+      "name": "Uneven pavement near Bus Stop",
+      "lat": 51.58953684962843,
+      "lng": -3.3253662584727683,
+      "restricted_for": [
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_11",
+      "name": "Temporary fence by Innovation House",
+      "lat":51.59158016337345,
+      "lng": -3.325506882120039,
+      "restricted_for": [
+        "walk",
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_12",
+      "name": "Blocked alley near Wenvoe",
+      "lat": 51.587174134497026,
+      "lng": -3.327030764498618,
+      "restricted_for": [
+        "walk"
+      ]
+    },
+    {
+      "id": "obs_13",
+      "name": "Slippery slope near Prospect House",
+      "lat": 51.59101667530875,
+      "lng": -3.3253450738058117,
+      "restricted_for": [
+        "cycle",
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_14",
+      "name": "Rail crossing near Train Station",
+      "lat": 51.59207865465008,
+      "lng":-3.3249773863435337,
+      "restricted_for": [
+        "disabled"
+      ]
+    },
+    {
+      "id": "obs_15",
+      "name": "Maintenance gate behind Eynon",
+      "lat":51.589754724842244,
+      "lng":  -3.326458512924916,
+      "restricted_for": [
+        "cycle"
+      ]
+    },
+    {
+      "id": "obs_16",
+      "name": "Narrow passage near Endeavour House",
+      "lat": 51.59274627017798,
+      "lng":-3.3255565095036723,
+      "restricted_for": [
+        "disabled"
+      ]
+    }
+  ]
+}
